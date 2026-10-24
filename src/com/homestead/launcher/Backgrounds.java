@@ -77,6 +77,8 @@ final class Backgrounds {
             // Dark, with a faint glow in the middle rather than a flat black.
             new Preset("ember",    "Ember",    0xFF35101F, 0xFF000000, 0xFFFFFFFF, 0xFFF0E6EA, EDGE, true),
             new Preset("deepsea",  "Deep sea", 0xFF08303A, 0xFF000000, 0xFFFFFFFF, 0xFFE6F0F2, EDGE, true),
+            // Flat, a very dark blue: no gradient behind the banners.
+            new Preset("night",    "Night",    0xFF0E1726, 0xFF0E1726, 0xFFE8EEF6, 0xFFFFFFFF, EDGE),
     };
 
     /** The setting value for the photo. */
