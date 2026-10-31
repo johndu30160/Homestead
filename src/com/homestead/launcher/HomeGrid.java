@@ -888,6 +888,15 @@ public class HomeGrid implements SettingsPanel.Host {
         title.setTextColor(Color.WHITE);
         title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 30);
         title.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        // A longer name ("TV en direct") would wrap and push the hint out of the tile: keep it
+        // on one line, smaller if it must be. The width is what the icon and paddings leave.
+        int w = AppModel.cellW(ctx) * 2 + dp(GAP_DP);
+        float room = w - dp(24) - (it.glyph != 0 ? dp(56) : 0) - dp(48);
+        title.setSingleLine(true);
+        title.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        for (int sp = 29; sp >= 20 && title.getPaint().measureText(it.label) > room; sp--) {
+            title.setTextSize(TypedValue.COMPLEX_UNIT_SP, sp);
+        }
         text.addView(title);
 
         TextView hint = new TextView(ctx);
@@ -911,7 +920,6 @@ public class HomeGrid implements SettingsPanel.Host {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         cell.addView(row, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        int w = AppModel.cellW(ctx) * 2 + dp(GAP_DP);
         int h = AppModel.cellH(ctx) * 3 / 2;
         column.addView(cell, new LinearLayout.LayoutParams(w, h));
     }
@@ -1119,7 +1127,7 @@ public class HomeGrid implements SettingsPanel.Host {
         List<String> pkgs = AppModel.reverted(ctx);
         TextView hint = new TextView(ctx);
         hint.setText(ctx.getString(pkgs.size() == 1 ? R.string.home_restore_hint_one
-                : R.string.home_restore_hint_many, revertedNames(pkgs)));
+                : R.string.home_restore_hint_many, revertedNames(ctx, pkgs)));
         hint.setTextColor(0xE6FFFFFF);
         hint.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
         hint.setMaxLines(2);
@@ -1255,15 +1263,15 @@ public class HomeGrid implements SettingsPanel.Host {
 
     /** The reverted packages by name, short enough for the tile: "A", "A and B",
      *  "A, B and C", or "A, B and 4 more". */
-    private static String revertedNames(List<String> pkgs) {
+    private static String revertedNames(Context c, List<String> pkgs) {
         int n = pkgs.size();
         if (n == 0) return "";
-        String a = Debloat.titleOf(pkgs.get(0));
+        String a = Debloat.titleOf(c, pkgs.get(0));
         if (n == 1) return a;
-        String b = Debloat.titleOf(pkgs.get(1));
-        if (n == 2) return a + " and " + b;
-        if (n == 3) return a + ", " + b + " and " + Debloat.titleOf(pkgs.get(2));
-        return a + ", " + b + " and " + (n - 2) + " more";
+        String b = Debloat.titleOf(c, pkgs.get(1));
+        if (n == 2) return c.getString(R.string.home_names_two, a, b);
+        if (n == 3) return c.getString(R.string.home_names_three, a, b, Debloat.titleOf(c, pkgs.get(2)));
+        return c.getString(R.string.home_names_more, a, b, n - 2);
     }
 
     /** Switch off again whatever the system switched back on; open Setup if there is no link. */
@@ -1293,7 +1301,7 @@ public class HomeGrid implements SettingsPanel.Host {
                     Prefs.noteDisabled(ctx, list[i], off);
                     if (!off) {
                         if (kept.length() > 0) kept.append(", ");
-                        kept.append(Debloat.titleOf(list[i]));
+                        kept.append(Debloat.titleOf(ctx, list[i]));
                     }
                 }
                 // Fire OS refuses some packages; the record is dropped so the tile does not
