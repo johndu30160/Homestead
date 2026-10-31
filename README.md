@@ -16,7 +16,8 @@
 >
 > **Open:**
 > - [#28](https://github.com/Sarg338/Homestead/pull/28): tiles for pages of Fire OS's own Settings;
-> - [#36](https://github.com/Sarg338/Homestead/pull/36): a home screen Design choice, Classic or Dock (the redesign from #27), and landscape backgrounds.
+> - [#36](https://github.com/Sarg338/Homestead/pull/36): a home screen Design choice, Classic or Dock (the redesign from #27), and landscape backgrounds;
+> - [#39](https://github.com/Sarg338/Homestead/pull/39): sharp non-TV app logos that fill their wide tile, like Fire TV's home.
 >
 > ## À propos de ce fork
 >
@@ -36,7 +37,8 @@
 >
 > **En cours :**
 > - [#28](https://github.com/Sarg338/Homestead/pull/28) : des tuiles vers les pages des Paramètres de Fire OS ;
-> - [#36](https://github.com/Sarg338/Homestead/pull/36) : un choix de Design pour l'écran d'accueil, Classique ou Dock (la refonte de la #27), et des fonds paysages.
+> - [#36](https://github.com/Sarg338/Homestead/pull/36) : un choix de Design pour l'écran d'accueil, Classique ou Dock (la refonte de la #27), et des fonds paysages ;
+> - [#39](https://github.com/Sarg338/Homestead/pull/39) : des logos d'applis non-TV nets qui remplissent leur tuile large, comme l'accueil de Fire TV.
 
 ---
 
