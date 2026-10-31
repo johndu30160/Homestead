@@ -9,12 +9,12 @@
 > - `build.ps1` to build on Windows (#13);
 > - line icons and a "connected" tag on the input tiles (#16);
 > - home screen options: greeting, date, wide non-TV tiles, Fire TV icons (#22);
+> - French translation, and a language choice, in Homestead 1.8.0 (#23);
 > - animated focus and the app name under the selected banner (#24);
 > - the antenna on the large Live TV tile (#25);
 > - TV Health: animator duration 1 so Amazon's menu keeps working (#29), and a screensaver you picked is kept (#30).
 >
 > **Open:**
-> - [#23](https://github.com/Sarg338/Homestead/pull/23): French translation, and a language choice;
 > - [#28](https://github.com/Sarg338/Homestead/pull/28): tiles for pages of Fire OS's own Settings;
 > - [#36](https://github.com/Sarg338/Homestead/pull/36): a home screen Design choice, Classic or Dock (the redesign from #27), and landscape backgrounds.
 >
@@ -29,12 +29,12 @@
 > - `build.ps1` pour compiler sous Windows (#13) ;
 > - icônes au trait et mention « connecté » sur les tuiles d'entrée (#16) ;
 > - options de l'écran d'accueil : salutation, date, tuiles larges pour les applis non-TV, icônes Fire TV (#22) ;
+> - traduction française, et un choix de langue, dans Homestead 1.8.0 (#23) ;
 > - sélection animée et nom de l'appli sous la bannière sélectionnée (#24) ;
 > - l'antenne sur la grande tuile TV en direct (#25) ;
 > - Santé de la TV : durée des animations à 1 pour que le menu d'Amazon continue de marcher (#29), et l'économiseur d'écran choisi est gardé (#30).
 >
 > **En cours :**
-> - [#23](https://github.com/Sarg338/Homestead/pull/23) : traduction française, et un choix de langue ;
 > - [#28](https://github.com/Sarg338/Homestead/pull/28) : des tuiles vers les pages des Paramètres de Fire OS ;
 > - [#36](https://github.com/Sarg338/Homestead/pull/36) : un choix de Design pour l'écran d'accueil, Classique ou Dock (la refonte de la #27), et des fonds paysages.
 
