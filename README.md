@@ -19,7 +19,8 @@
 > - [#36](https://github.com/Sarg338/Homestead/pull/36): a home screen Design choice, Classic or Dock (the redesign from #27), and landscape backgrounds;
 > - [#39](https://github.com/Sarg338/Homestead/pull/39): sharp non-TV app logos that fill their wide tile, like Fire TV's home;
 > - [#40](https://github.com/Sarg338/Homestead/pull/40): Equipment control and Help shortcuts, and Accessibility on Fire OS 8;
-> - [#41](https://github.com/Sarg338/Homestead/pull/41): the navigation click on Up and Down too.
+> - [#41](https://github.com/Sarg338/Homestead/pull/41): the navigation click on Up and Down too;
+> - [#42](https://github.com/Sarg338/Homestead/pull/42): the Appstore tile opens the store, and its search stays on screen.
 >
 > ## À propos de ce fork
 >
@@ -42,7 +43,8 @@
 > - [#36](https://github.com/Sarg338/Homestead/pull/36) : un choix de Design pour l'écran d'accueil, Classique ou Dock (la refonte de la #27), et des fonds paysages ;
 > - [#39](https://github.com/Sarg338/Homestead/pull/39) : des logos d'applis non-TV nets qui remplissent leur tuile large, comme l'accueil de Fire TV ;
 > - [#40](https://github.com/Sarg338/Homestead/pull/40) : les raccourcis Contrôle de l'équipement et Aide, et Accessibilité sur Fire OS 8 ;
-> - [#41](https://github.com/Sarg338/Homestead/pull/41) : le son de navigation aussi en montant et en descendant.
+> - [#41](https://github.com/Sarg338/Homestead/pull/41) : le son de navigation aussi en montant et en descendant ;
+> - [#42](https://github.com/Sarg338/Homestead/pull/42) : la tuile Appstore ouvre la boutique, et sa recherche reste affichée.
 
 ---
 
