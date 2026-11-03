@@ -12,15 +12,14 @@
 > - French translation, and a language choice, in Homestead 1.8.0 (#23);
 > - animated focus and the app name under the selected banner (#24);
 > - the antenna on the large Live TV tile (#25);
-> - TV Health: animator duration 1 so Amazon's menu keeps working (#29), and a screensaver you picked is kept (#30).
+> - TV Health: animator duration 1 so Amazon's menu keeps working (#29), and a screensaver you picked is kept (#30);
+> - sharp non-TV app logos that fill their wide tile (#39), Equipment control and Help shortcuts (#40), the navigation click on Up and Down (#41), in Homestead 1.9.0;
+> - the Appstore tile opens the store, and its search stays on screen (#42), in Homestead 1.9.1;
+> - a home screen Design choice, Classic or Dock (the redesign from #27), and landscape backgrounds (#36), in Homestead 2.0.0.
 >
-> **Open:**
-> - [#28](https://github.com/Sarg338/Homestead/pull/28): tiles for pages of Fire OS's own Settings (can be closed, replaced by #40);
-> - [#36](https://github.com/Sarg338/Homestead/pull/36): a home screen Design choice, Classic or Dock (the redesign from #27), and landscape backgrounds;
-> - [#39](https://github.com/Sarg338/Homestead/pull/39): sharp non-TV app logos that fill their wide tile, like Fire TV's home;
-> - [#40](https://github.com/Sarg338/Homestead/pull/40): Equipment control and Help shortcuts, and Accessibility on Fire OS 8;
-> - [#41](https://github.com/Sarg338/Homestead/pull/41): the navigation click on Up and Down too;
-> - [#42](https://github.com/Sarg338/Homestead/pull/42): the Appstore tile opens the store, and its search stays on screen.
+> **Closed:** #28 (tiles for Fire OS's own Settings pages), replaced by #40.
+>
+> No pull request is open right now.
 >
 > ## À propos de ce fork
 >
@@ -36,15 +35,14 @@
 > - traduction française, et un choix de langue, dans Homestead 1.8.0 (#23) ;
 > - sélection animée et nom de l'appli sous la bannière sélectionnée (#24) ;
 > - l'antenne sur la grande tuile TV en direct (#25) ;
-> - Santé de la TV : durée des animations à 1 pour que le menu d'Amazon continue de marcher (#29), et l'économiseur d'écran choisi est gardé (#30).
+> - Santé de la TV : durée des animations à 1 pour que le menu d'Amazon continue de marcher (#29), et l'économiseur d'écran choisi est gardé (#30) ;
+> - des logos d'applis non-TV nets qui remplissent leur tuile large (#39), les raccourcis Contrôle de l'équipement et Aide (#40), le son de navigation en montant et en descendant (#41), dans Homestead 1.9.0 ;
+> - la tuile Appstore ouvre la boutique, et sa recherche reste affichée (#42), dans Homestead 1.9.1 ;
+> - un choix de Design pour l'écran d'accueil, Classique ou Dock (la refonte de la #27), et des fonds paysages (#36), dans Homestead 2.0.0.
 >
-> **En cours :**
-> - [#28](https://github.com/Sarg338/Homestead/pull/28) : des tuiles vers les pages des Paramètres de Fire OS (peut être fermée, remplacée par la #40) ;
-> - [#36](https://github.com/Sarg338/Homestead/pull/36) : un choix de Design pour l'écran d'accueil, Classique ou Dock (la refonte de la #27), et des fonds paysages ;
-> - [#39](https://github.com/Sarg338/Homestead/pull/39) : des logos d'applis non-TV nets qui remplissent leur tuile large, comme l'accueil de Fire TV ;
-> - [#40](https://github.com/Sarg338/Homestead/pull/40) : les raccourcis Contrôle de l'équipement et Aide, et Accessibilité sur Fire OS 8 ;
-> - [#41](https://github.com/Sarg338/Homestead/pull/41) : le son de navigation aussi en montant et en descendant ;
-> - [#42](https://github.com/Sarg338/Homestead/pull/42) : la tuile Appstore ouvre la boutique, et sa recherche reste affichée.
+> **Fermée :** #28 (des tuiles vers les pages des Paramètres de Fire OS), remplacée par la #40.
+>
+> Aucune pull request n'est ouverte en ce moment.
 
 ---
 
