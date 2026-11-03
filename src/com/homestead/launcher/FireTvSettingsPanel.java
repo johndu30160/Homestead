@@ -14,6 +14,7 @@ package com.homestead.launcher;
 
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.view.View;
@@ -29,8 +30,10 @@ import java.util.List;
  *
  * Every screen is an action that com.amazon.tv.settings.v2 answers, aimed at that package
  * so a second handler (the quick settings overlay also answers some) cannot turn the press
- * into an app chooser. A screen is left out on a TV where the action finds nothing, or
- * where it needs a permission only Amazon's own apps hold.
+ * into an app chooser, or a screen of another Amazon app named by component. A screen is
+ * left out on a TV where the action finds nothing, or where it needs a permission only
+ * Amazon's own apps hold. Where a standard Android action opens the very same screen
+ * without the permission, that action is used instead (Accessibility on Fire OS 8).
  */
 public final class FireTvSettingsPanel {
 
@@ -63,6 +66,23 @@ public final class FireTvSettingsPanel {
             { "account", "Amazon account", A + "MY_ACCOUNT", "The account this TV is signed in to." },
             { "device", "My Fire TV", A + "DEVICE",
                     "About this TV, software updates, Developer options and ADB debugging." },
+            // Not in the Settings app: these two are screens of their own apps, by component.
+            { "equipment", "Equipment control",
+                    "com.amazon.tv.devicecontrolsettings/.screens.main_menu.OzOobeSettingsActivity",
+                    "Control a soundbar, receiver or set-top box with the Fire TV remote." },
+            { "help", "Help", "com.amazon.tv.csapp/.activity.CSLandingActivity",
+                    "Amazon's help videos, guides and contact options." },
+    };
+
+    /**
+     * Id, then a standard Android action to try when the screen's own action needs Amazon's
+     * permission. It only counts where it resolves to the same activity as the screen's own
+     * action: on Fire OS 8 the accessibility action does and opens the screen without the
+     * permission; on Fire OS 7 it lands on a stub (.compliance.CTSDummyIntentHandler), so
+     * the screen stays locked there, as before.
+     */
+    private static final String[][] FALLBACKS = {
+            { "accessibility", "android.settings.ACCESSIBILITY_SETTINGS" },
     };
 
     /** The home screen's names for SCREENS, row for row, in the TV's language: tile, pill. */
@@ -77,6 +97,8 @@ public final class FireTvSettingsPanel {
             { R.string.home_sc_data, R.string.home_sc_data_short },
             { R.string.home_sc_account, R.string.home_sc_account_short },
             { R.string.home_sc_device, R.string.home_sc_device },
+            { R.string.home_sc_equipment, R.string.home_sc_equipment_short },
+            { R.string.home_sc_help, R.string.home_sc_help },
     };
 
     /** What each screen holds, row for row with SCREENS, in the TV's language. */
@@ -84,28 +106,40 @@ public final class FireTvSettingsPanel {
             R.string.ftv_h_network, R.string.ftv_h_display, R.string.ftv_h_controllers,
             R.string.ftv_h_accessibility, R.string.ftv_h_applications, R.string.ftv_h_language,
             R.string.ftv_h_preferences, R.string.ftv_h_data, R.string.ftv_h_account,
-            R.string.ftv_h_device,
+            R.string.ftv_h_device, R.string.ftv_h_equipment, R.string.ftv_h_help,
     };
 
     private FireTvSettingsPanel() { }
 
-    /** A screen's name and help on these pages: the home screen's name, the help above. */
-    private static String title(Context c, String[] s) { return homeLabel(c, s[ACTION], false); }
-
-    private static String help(Context c, String[] s) {
-        for (int i = 0; i < SCREENS.length; i++) if (SCREENS[i] == s) return c.getString(HELPS[i]);
-        return s[HELP];
+    /** The row of SCREENS with this id; -1 for none (the top bar's own pills, for one). */
+    private static int indexOf(String id) {
+        for (int i = 0; i < SCREENS.length; i++) if (SCREENS[i][ID].equals(id)) return i;
+        return -1;
     }
 
-    /** A screen's name on the home screen, by its action; null for an action not in SCREENS. */
-    static String homeLabel(Context c, String action, boolean pill) {
-        for (int i = 0; i < SCREENS.length; i++) {
-            if (SCREENS[i][ACTION].equals(action)) return c.getString(HOME_LABELS[i][pill ? 1 : 0]);
-        }
+    /** A screen's name and help on these pages: the home screen's name, the help above. */
+    private static String title(Context c, String[] s) { return homeLabel(c, s[ID], false); }
+
+    private static String help(Context c, String[] s) {
+        int i = indexOf(s[ID]);
+        return i >= 0 ? c.getString(HELPS[i]) : s[HELP];
+    }
+
+    /** A screen's name on the home screen, by its id; null for an id not in SCREENS. */
+    static String homeLabel(Context c, String id, boolean pill) {
+        int i = indexOf(id);
+        return i >= 0 ? c.getString(HOME_LABELS[i][pill ? 1 : 0]) : null;
+    }
+
+    private static String fallbackFor(String id) {
+        for (int i = 0; i < FALLBACKS.length; i++) if (FALLBACKS[i][0].equals(id)) return FALLBACKS[i][1];
         return null;
     }
 
     static Intent intentFor(String action) {
+        if (action.indexOf('/') > 0) {
+            return new Intent().setComponent(android.content.ComponentName.unflattenFromString(action));
+        }
         Intent i = new Intent(action);
         i.setPackage(SETTINGS_PKG);
         return i;
@@ -118,19 +152,48 @@ public final class FireTvSettingsPanel {
      */
     static List<String[]> available(Context c, List<String> locked) {
         List<String[]> out = new ArrayList<String[]>();
+        PackageManager pm = c.getPackageManager();
         for (int i = 0; i < SCREENS.length; i++) {
-            ResolveInfo ri = c.getPackageManager().resolveActivity(intentFor(SCREENS[i][ACTION]), 0);
-            if (ri == null || ri.activityInfo == null) continue;
-            String need = ri.activityInfo.permission;
-            // checkPermission, not checkSelfPermission: the latter is Android 6+ only.
-            if (need != null && c.checkPermission(need, android.os.Process.myPid(),
-                    android.os.Process.myUid()) != PackageManager.PERMISSION_GRANTED) {
-                if (locked != null) locked.add(c.getString(HOME_LABELS[i][0]));
+            ResolveInfo ri = pm.resolveActivity(intentFor(SCREENS[i][ACTION]), 0);
+            // An explicit component resolves even when it is not exported; it would then throw.
+            if (!opens(ri)) continue;
+            if (granted(c, ri.activityInfo.permission)) {
+                out.add(SCREENS[i]);
                 continue;
             }
-            out.add(SCREENS[i]);
+            // Behind Amazon's permission. A standard action that lands on the same activity
+            // without it opens the screen all the same; the row then carries that action.
+            String alt = fallbackFor(SCREENS[i][ID]);
+            ResolveInfo ar = alt == null ? null : pm.resolveActivity(intentFor(alt), 0);
+            if (opens(ar) && sameScreen(ri.activityInfo, ar.activityInfo)
+                    && granted(c, ar.activityInfo.permission)) {
+                String[] row = SCREENS[i].clone();
+                row[ACTION] = alt;
+                out.add(row);
+                continue;
+            }
+            if (locked != null) locked.add(c.getString(HOME_LABELS[i][0]));
         }
         return out;
+    }
+
+    private static boolean opens(ResolveInfo ri) {
+        return ri != null && ri.activityInfo != null && ri.activityInfo.exported;
+    }
+
+    /** checkPermission, not checkSelfPermission: the latter is Android 6+ only. */
+    private static boolean granted(Context c, String permission) {
+        return permission == null || c.checkPermission(permission, android.os.Process.myPid(),
+                android.os.Process.myUid()) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    /** The same activity, counting an alias as the activity it stands for. */
+    private static boolean sameScreen(ActivityInfo a, ActivityInfo b) {
+        return a.packageName.equals(b.packageName) && target(a).equals(target(b));
+    }
+
+    private static String target(ActivityInfo ai) {
+        return ai.targetActivity != null ? ai.targetActivity : ai.name;
     }
 
     // ---------------------------------------------------------------- the hub

@@ -28,6 +28,9 @@
   <string name="home_sc_account">Amazon account</string>
   <string name="home_sc_account_short">Account</string>
   <string name="home_sc_device">My Fire TV</string>
+  <string name="home_sc_equipment">Equipment control</string>
+  <string name="home_sc_equipment_short">Equipment</string>
+  <string name="home_sc_help">Help</string>
   <string name="home_sc_more">More settings</string>
   <string name="home_sc_settings">Settings</string>
   <string name="home_airplay_hint">Open Display &amp; Sounds, then Apple AirPlay and HomeKit</string>
@@ -57,6 +60,16 @@
   <string name="opt_wide_help">Like Fire TV\'s own home: each app\'s icon on a banner-sized tile, in a grid like the TV apps.</string>
   <string name="opt_fire">Fire TV system icons</string>
   <string name="opt_fire_help">Amazon Home, Settings and TV Health use the icons of Fire OS\'s own home and Settings, read from this TV. Where one is missing, the usual icon stays.</string>
+  <string name="opt_design">Design</string>
+  <string name="opt_design_help">Classic: the sections, each under its heading. Dock: the first of your TV apps, in their sort order, on a band at the bottom of the first screen, with a glow in the selected app\'s colour, everything else in one grid below, and the clock and Settings in a bar at the top.</string>
+  <string name="opt_design_classic">Classic</string>
+  <string name="opt_design_dock">Dock</string>
+  <string name="opt_dock_size">Dock size</string>
+  <string name="opt_dock_size_help">How big the tiles in the dock are. Fewer fit at the larger sizes.</string>
+  <string name="opt_dock_s">Small</string>
+  <string name="opt_dock_m">Medium</string>
+  <string name="opt_dock_l">Large</string>
+  <string name="opt_dock_xl">Extra large</string>
 
   <!-- Settings -->
   <string name="set_title">Settings</string>
@@ -465,6 +478,16 @@
   <string name="bg_ember">Ember</string>
   <string name="bg_deepsea">Deep sea</string>
   <string name="bg_list_help">Select one to use it. The home screen beside this page changes straight away.</string>
+  <string name="bg_landscapes">Landscapes</string>
+  <string name="bg_landscapes_help">Makes this landscape the background. A photo you sent is kept; choose \"Photo\" to go back to it. The dimming above applies here too.</string>
+  <string name="ls_drawn_dusk">Mountains at dusk</string>
+  <string name="ls_drawn_lake">Mountain lake</string>
+  <string name="ls_drawn_forest">Forest in the mist</string>
+  <string name="ls_drawn_dunes">Dunes</string>
+  <string name="ls_photo_ciucas">Ciucaș Peak, Romania</string>
+  <string name="ls_photo_crete">Mount Ida, Crete</string>
+  <string name="ls_photo_sanjuan">San Juan Valley</string>
+  <string name="ls_photo_scuol">Alps near Scuol</string>
   <string name="bg_black_help">Black is for OLED screens and night viewing.</string>
   <string name="bg_photo_help">Choose a picture saved on the TV below (needs the on-device tunnel), or send a JPEG or PNG from a computer:</string>
   <string name="bg_in_use">in use</string>
@@ -642,6 +665,8 @@
   <string name="ftv_h_data">Data used by apps and video.</string>
   <string name="ftv_h_account">The account this TV is signed in to.</string>
   <string name="ftv_h_device">About this TV, software updates, Developer options and ADB debugging.</string>
+  <string name="ftv_h_equipment">Control a soundbar, receiver or set-top box with the Fire TV remote.</string>
+  <string name="ftv_h_help">Amazon\'s help videos, guides and contact options.</string>
 
   <!-- Amazon's launcher switched off (1.7.0) -->
   <string name="lo_title">Amazon\'s launcher is off</string>

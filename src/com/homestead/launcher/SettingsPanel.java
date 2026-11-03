@@ -189,8 +189,45 @@ public final class SettingsPanel {
 
     // ---------------------------------------------------------------- home screen
 
+    /** The dock layout is what the home screen draws: Dock chosen, and not Simple mode. */
+    private static boolean dockLayout(Context c) {
+        return Prefs.design(c) == Prefs.DESIGN_DOCK && !Prefs.simpleMode(c);
+    }
+
     private static View buildHome(final Context c, final Host host, final Runnable changed) {
         final Panel p = new Panel(c, c.getString(R.string.set_home), null, Panel.SHEET);
+
+        // The design first: it decides what the rest of the page means. Dock size shows
+        // only with Dock, and Row order (further down) only with Classic, which has rows.
+        final int[] designs = { R.string.opt_design_classic, R.string.opt_design_dock };
+        final int[] sizes = { R.string.opt_dock_s, R.string.opt_dock_m, R.string.opt_dock_l, R.string.opt_dock_xl };
+        final Panel.Row[] orderRow = new Panel.Row[1];
+        final Panel.Row design = p.addRow(c.getString(R.string.opt_design),
+                c.getString(designs[Prefs.design(c)]), null);
+        final Panel.Row dockSize = p.addRow(c.getString(R.string.opt_dock_size),
+                c.getString(sizes[Prefs.dockSize(c)]), null);
+        dockSize.cell.setVisibility(Prefs.design(c) == Prefs.DESIGN_DOCK ? View.VISIBLE : View.GONE);
+        design.cell.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                int n = (Prefs.design(c) + 1) % designs.length;
+                Prefs.setDesign(c, n);
+                design.setValue(c.getString(designs[n]));
+                dockSize.cell.setVisibility(n == Prefs.DESIGN_DOCK ? View.VISIBLE : View.GONE);
+                if (orderRow[0] != null) orderRow[0].cell.setVisibility(dockLayout(c) ? View.GONE : View.VISIBLE);
+                host.rebuildGrid();
+                changed.run();
+            }
+        });
+        design.setHelp(c.getString(R.string.opt_design_help));
+        dockSize.cell.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                int n = (Prefs.dockSize(c) + 1) % sizes.length;
+                Prefs.setDockSize(c, n);
+                dockSize.setValue(c.getString(sizes[n]));
+                host.rebuildGrid();
+            }
+        });
+        dockSize.setHelp(c.getString(R.string.opt_dock_size_help));
 
         final Panel.Row hidden = p.addRow(c.getString(R.string.set_hidden),
                 String.valueOf(Prefs.hiddenCount(c)), null).opens();
@@ -300,6 +337,9 @@ public final class SettingsPanel {
             public void onClick(View v) { host.showPanel(buildRowOrder(c, host)); }
         });
         order.setHelp(c.getString(R.string.set_row_order_help));
+        // One grid in Dock, so there is no row order to set; Simple mode keeps the rows.
+        order.cell.setVisibility(dockLayout(c) ? View.GONE : View.VISIBLE);
+        orderRow[0] = order;
         // The order changes on the page this row opens; repaint it on the way back.
         order.cell.setOnFocusChangeListener(chain(order.cell.getOnFocusChangeListener(),
                 new Runnable() {
@@ -538,7 +578,8 @@ public final class SettingsPanel {
             boolean photo = i == Backgrounds.PRESETS.length;
             final Backgrounds.Preset look = photo ? Backgrounds.PHOTO_LOOK : Backgrounds.PRESETS[i];
             final Panel.Row r = p.addRow(Backgrounds.name(c, look), "", null);
-            android.graphics.Bitmap shot = photo ? Backgrounds.lastPhoto() : null;
+            // The decoded picture may be a landscape; the Photo row shows only the photo.
+            android.graphics.Bitmap shot = photo && Backgrounds.photoChosen(c) ? Backgrounds.lastPhoto() : null;
             r.setSwatch(shot != null
                     ? new android.graphics.drawable.BitmapDrawable(c.getResources(), shot)
                     : swatch(c, look));
@@ -574,6 +615,29 @@ public final class SettingsPanel {
         p.addRow(c.getString(R.string.set_photo_pick), "", new Runnable() {
             public void run() { host.showPanel(PhotoPanel.build(c, host)); }
         }).opens().setHelp(c.getString(R.string.set_photo_pick_help));
+
+        // Landscapes shipped in the app: a look of its own each, no computer needed, and the
+        // photo sent before stays where it is.
+        String[] scenes = Backgrounds.landscapes(c);
+        if (scenes.length > 0) p.addHeader(c.getString(R.string.bg_landscapes));
+        for (int i = 0; i < scenes.length; i++) {
+            final String file = scenes[i];
+            final Panel.Row r = p.addRow(Backgrounds.landscapeName(c, file), "", null);
+            android.graphics.Bitmap thumb = Backgrounds.landscapeThumb(c, file);
+            if (thumb != null) r.setSwatch(new android.graphics.drawable.BitmapDrawable(c.getResources(), thumb));
+            r.setHelp(c.getString(R.string.bg_landscapes_help));
+            r.cell.setOnClickListener(new View.OnClickListener() {
+                public void onClick(View v) {
+                    Backgrounds.choose(c, Backgrounds.landscapeId(file));
+                    mark.run();
+                    host.rebuildGrid();
+                    changed.run();
+                }
+            });
+            rows.add(r);
+            ids.add(Backgrounds.landscapeId(file));
+        }
+        mark.run();
 
         p.addRow(c.getString(R.string.set_back), "", new Runnable() {
             public void run() { host.closePanel(); }

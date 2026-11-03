@@ -21,9 +21,14 @@ import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.graphics.Bitmap;
+import android.graphics.BitmapShader;
 import android.graphics.Canvas;
+import android.graphics.Matrix;
+import android.graphics.Paint;
 import android.graphics.Path;
+import android.graphics.Rect;
 import android.graphics.RectF;
+import android.graphics.Shader;
 import android.graphics.drawable.Drawable;
 import android.media.tv.TvInputInfo;
 import android.media.tv.TvInputManager;
@@ -59,7 +64,10 @@ public final class AppModel {
     public static final int TYPE_LIVETV = 5;
     /** Offers to switch off again what a system update switched back on. */
     public static final int TYPE_RESTORE = 6;
-    /** One of Amazon's settings screens, in the optional shortcuts row. cls holds its action. */
+    /**
+     * One of Amazon's settings screens, in the optional shortcuts row. cls holds its action,
+     * scId its id in FireTvSettingsPanel.SCREENS (null for the top bar's own pills).
+     */
     public static final int TYPE_SHORTCUT = 7;
 
     static final String LIVETV_PKG = "com.amazon.tv.livetv";
@@ -77,6 +85,10 @@ public final class AppModel {
     static final String PROFILE_PICKER_PKG = "com.amazon.ftv.profilepicker";
     static final String AMAZON_KIDS_PKG = "com.amazon.tahoe";
     static final String WSIW_PKG = "com.amazon.vizzini.ftvcds";
+
+    /** The Appstore, and the store's own home screen (its launcher entry is not the store). */
+    static final String APPSTORE_PKG = "com.amazon.venezia";
+    static final String APPSTORE_HOME = "com.amazon.venezia.ade.ADEHomeActivity";
     /** Prime Video on Fire TV. */
     static final String PRIME_VIDEO_PKG = "com.amazon.firebat";
     /**
@@ -102,6 +114,7 @@ public final class AppModel {
         public String pkg;
         public String cls;
         public String inputId;
+        public String scId;
         public String label;
         /**
          * Declares LEANBACK_LAUNCHER or has banner art. Many Fire OS apps declare only
@@ -115,6 +128,8 @@ public final class AppModel {
         public int glyph;
         /** Inputs: the TV reports a device on this input. */
         public boolean connected;
+        /** The banner's dominant colour, for the dock design's glow; 0 without a banner. */
+        public int accent;
 
         /** Stable across a re-sort; the handoff carries this, never an index. */
         public String key() {
@@ -282,12 +297,26 @@ public final class AppModel {
                 a.banner = toBitmap(c, raw, cellW, cellH, true);
                 raw = null;
                 a.tvApp = (ci == 0) || a.banner != null;
+                if (a.banner != null) a.accent = dominantColor(a.banner);
                 // Icons are only shown when there is no banner, so only decode them then.
                 if (a.banner == null) {
                     Drawable ic = null;
-                    try { ic = ri.loadIcon(pm); } catch (Throwable t) { ic = null; }
-                    if (wide) a.banner = iconTile(c, ic, cellW, cellH);
-                    else a.icon = toBitmap(c, ic, ICON_PX, ICON_PX, false);
+                    // A wide tile draws the icon at tile height: take the sharpest density the app ships.
+                    if (wide) {
+                        try {
+                            ic = pm.getResourcesForApplication(ri.activityInfo.applicationInfo)
+                                    .getDrawableForDensity(ri.getIconResource(), DisplayMetrics.DENSITY_XXXHIGH);
+                        } catch (Throwable t) { ic = null; }
+                    }
+                    if (ic == null) {
+                        try { ic = ri.loadIcon(pm); } catch (Throwable t) { ic = null; }
+                    }
+                    if (wide) {
+                        a.banner = iconTile(c, ic, cellW, cellH);
+                        if (a.banner != null) a.accent = dominantColor(a.banner);
+                    } else {
+                        a.icon = toBitmap(c, ic, ICON_PX, ICON_PX, false);
+                    }
                     ic = null;
                 }
                 ITEMS.add(a);
@@ -393,7 +422,8 @@ public final class AppModel {
             Item it = new Item();
             it.type = TYPE_SHORTCUT;
             it.cls = s[FireTvSettingsPanel.ACTION];
-            it.label = FireTvSettingsPanel.homeLabel(c, it.cls, false);
+            it.scId = s[FireTvSettingsPanel.ID];
+            it.label = FireTvSettingsPanel.homeLabel(c, it.scId, false);
             it.icon = ShortcutIcons.render(s[FireTvSettingsPanel.ID], ICON_PX);
             ITEMS.add(it);
         }
@@ -577,11 +607,51 @@ public final class AppModel {
     }
 
     /**
-     * A banner for an app that has none, the way Fire TV's own home draws one: the icon,
-     * full height, on a tile filled with the colour at the icon's left edge.
+     * One colour for the dock design's glow (from PR #27): the average of a 6x6 grid of
+     * samples, pushed to a minimum saturation and brightness so it reads on a dark screen.
+     */
+    private static int dominantColor(Bitmap bmp) {
+        try {
+            int w = bmp.getWidth(), h = bmp.getHeight();
+            long r = 0, g = 0, b = 0;
+            int n = 0;
+            for (int yi = 0; yi < 6; yi++) {
+                int y = Math.min(h - 1, (int) ((yi + 0.5f) * h / 6));
+                for (int xi = 0; xi < 6; xi++) {
+                    int p = bmp.getPixel(Math.min(w - 1, (int) ((xi + 0.5f) * w / 6)), y);
+                    if ((p >>> 24) < 32) continue;
+                    r += (p >> 16) & 0xFF;
+                    g += (p >> 8) & 0xFF;
+                    b += p & 0xFF;
+                    n++;
+                }
+            }
+            if (n == 0) return 0;
+            float[] hsv = new float[3];
+            android.graphics.Color.RGBToHSV((int) (r / n), (int) (g / n), (int) (b / n), hsv);
+            // Colourless art (a black-and-white banner) has no hue to push: no glow, not red.
+            if (hsv[1] < 0.12f) return 0;
+            hsv[1] = Math.max(hsv[1], 0.55f);
+            hsv[2] = Math.max(hsv[2], 0.55f);
+            return android.graphics.Color.HSVToColor(hsv);
+        } catch (Throwable t) {
+            return 0;
+        }
+    }
+
+    /**
+     * A banner for an app that has none, the way Fire TV's own home draws one: the icon's art
+     * at full height, its outer columns stretched to the sides. An icon with a transparent
+     * edge (round, or a glyph) sits whole on a neutral card instead. One that is opaque at
+     * its edge but empty around its shape (a circle, Android's adaptive-icon mask) sits on a
+     * tile of its edge colour, the way every icon did before 1.9.0: stretching it would copy
+     * the empty corners out to the sides.
      */
     private static Bitmap iconTile(Context c, Drawable ic, int w, int h) {
-        Bitmap icon = toBitmap(c, ic, h, h, false);
+        // Drawn at up to twice the tile size and in its own shape, then scaled down: squeezed
+        // into an h x h square first, a wide icon (Amazon Photos ships a 1280x720 one) lost
+        // most of its pixels and came out blurred once stretched to fill the tile.
+        Bitmap icon = toBitmap(c, ic, 2 * w, 2 * h, false);
         if (icon == null) return null;
         try {
             Bitmap bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
@@ -590,16 +660,84 @@ public final class AppModel {
             float r = dp(c, CORNER_DP);
             clip.addRoundRect(new RectF(0, 0, w, h), r, r, Path.Direction.CW);
             cv.clipPath(clip);
+            Paint smooth = new Paint(Paint.FILTER_BITMAP_FLAG);
             int edge = icon.getPixel(1, icon.getHeight() / 2);
             // A round or transparent icon has no edge colour; use a neutral card instead.
-            cv.drawColor((edge >>> 24) < 0x80 ? 0xFF2A333D : (edge | 0xFF000000));
-            cv.drawBitmap(icon, (w - icon.getWidth()) / 2f, (h - icon.getHeight()) / 2f, null);
+            if ((edge >>> 24) < 0x80) {
+                cv.drawColor(0xFF2A333D);
+                drawFitted(cv, icon, w, h, smooth);
+                return bmp;
+            }
+            // Fire TV's home fills the tile with the art: drop the icon's transparent margin
+            // and rounded corners, fit it to the tile height (wide art then covers the tile),
+            // and stretch its outer columns to the sides so no seam shows.
+            int iw = icon.getWidth(), ih = icon.getHeight();
+            int[] px = new int[iw * ih];
+            icon.getPixels(px, 0, iw, 0, 0, iw, ih);
+            Rect art = opaqueBounds(px, iw, ih);
+            // Rounded corners only reach the top and bottom rows; trimming the sides could cut
+            // into a logo that runs to the edge, which the stretch would then smear.
+            art.inset(0, Math.min(art.width(), art.height()) / 12);
+            // The columns to be stretched have to be opaque from top to bottom, or what is left
+            // of a corner's curve becomes a see-through strip beside the art. Step in past the
+            // rounding, but only a little: a shape that is empty around its edge (a circle, an
+            // adaptive icon's mask) would lose its sides, so it keeps a solid tile instead.
+            int limit = art.width() / 8;
+            int left = art.left, right = art.right;
+            while (left < art.left + limit && !opaqueColumn(px, iw, left, art.top, art.bottom)) left++;
+            while (right > art.right - limit && !opaqueColumn(px, iw, right - 1, art.top, art.bottom)) right--;
+            if (art.height() <= 0 || right - left < art.width() / 2
+                    || !opaqueColumn(px, iw, left, art.top, art.bottom)
+                    || !opaqueColumn(px, iw, right - 1, art.top, art.bottom)) {
+                cv.drawColor(edge | 0xFF000000);
+                drawFitted(cv, icon, w, h, smooth);
+                return bmp;
+            }
+            Bitmap core = Bitmap.createBitmap(icon, left, art.top, right - left, art.height());
+            float s = (float) h / core.getHeight();
+            Matrix m = new Matrix();
+            m.setScale(s, s);
+            m.postTranslate((w - core.getWidth() * s) / 2f, 0);
+            BitmapShader sh = new BitmapShader(core, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP);
+            sh.setLocalMatrix(m);
+            smooth.setShader(sh);
+            cv.drawRect(0, 0, w, h, smooth);
+            if (core != icon) core.recycle();
             return bmp;
         } catch (Throwable t) {
             return null;
         } finally {
             icon.recycle();
         }
+    }
+
+    /** The icon whole, as large as fits, centred. */
+    private static void drawFitted(Canvas cv, Bitmap icon, int w, int h, Paint p) {
+        float k = Math.min((float) h / icon.getHeight(), (float) w / icon.getWidth());
+        float iw = icon.getWidth() * k, ih = icon.getHeight() * k;
+        cv.drawBitmap(icon, null, new RectF((w - iw) / 2f, (h - ih) / 2f, (w + iw) / 2f, (h + ih) / 2f), p);
+    }
+
+    /** The box around the pixels that are at least half opaque; the whole bitmap if none. */
+    private static Rect opaqueBounds(int[] px, int w, int h) {
+        int l = w, t = h, r = -1, btm = -1;
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                if ((px[y * w + x] >>> 24) < 0x80) continue;
+                if (x < l) l = x;
+                if (x > r) r = x;
+                if (y < t) t = y;
+                if (y > btm) btm = y;
+            }
+        }
+        return r < 0 ? new Rect(0, 0, w, h) : new Rect(l, t, r + 1, btm + 1);
+    }
+
+    /** Whether column x is at least half opaque on every row from top to bottom (exclusive). */
+    private static boolean opaqueColumn(int[] px, int w, int x, int top, int bottom) {
+        if (x < 0 || x >= w) return false;
+        for (int y = top; y < bottom; y++) if ((px[y * w + x] >>> 24) < 0x80) return false;
+        return true;
     }
 
     /**
