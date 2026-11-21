@@ -17,6 +17,7 @@ import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
+import android.os.Build;
 import android.view.View;
 import android.widget.Toast;
 
@@ -53,6 +54,11 @@ public final class FireTvSettingsPanel {
                     "Wi-Fi, Ethernet and adding a network." },
             { "display", "Display & sounds", A + "DISPLAY_AND_SOUNDS",
                     "Resolution, HDR, audio, HDMI device control, ambient mode." },
+            // Not a settings page: the screen that waits for a phone or computer to send its
+            // picture, a screen of its own app, by component. Amazon's menu keeps it under
+            // Display & sounds. Seen on Fire OS 7 (an Insignia TV and a Fire TV Stick).
+            { "mirroring", "Display mirroring", "com.amazon.cast.sink/.DisplayMirroringSinkActivity",
+                    "Show the screen of a phone, tablet or computer on this TV (Miracast)." },
             { "controllers", "Controllers & Bluetooth", A + "CONTROLLERS",
                     "Pair a remote, a game controller or any Bluetooth device." },
             { "accessibility", "Accessibility", A + "ACCESSIBILITY",
@@ -89,6 +95,7 @@ public final class FireTvSettingsPanel {
     private static final int[][] HOME_LABELS = {
             { R.string.home_sc_network, R.string.home_sc_network },
             { R.string.home_sc_display, R.string.home_sc_display_short },
+            { R.string.home_sc_mirroring, R.string.home_sc_mirroring_short },
             { R.string.home_sc_controllers, R.string.home_sc_controllers_short },
             { R.string.home_sc_accessibility, R.string.home_sc_accessibility },
             { R.string.home_sc_applications, R.string.home_sc_applications },
@@ -103,10 +110,11 @@ public final class FireTvSettingsPanel {
 
     /** What each screen holds, row for row with SCREENS, in the TV's language. */
     private static final int[] HELPS = {
-            R.string.ftv_h_network, R.string.ftv_h_display, R.string.ftv_h_controllers,
-            R.string.ftv_h_accessibility, R.string.ftv_h_applications, R.string.ftv_h_language,
-            R.string.ftv_h_preferences, R.string.ftv_h_data, R.string.ftv_h_account,
-            R.string.ftv_h_device, R.string.ftv_h_equipment, R.string.ftv_h_help,
+            R.string.ftv_h_network, R.string.ftv_h_display, R.string.ftv_h_mirroring,
+            R.string.ftv_h_controllers, R.string.ftv_h_accessibility, R.string.ftv_h_applications,
+            R.string.ftv_h_language, R.string.ftv_h_preferences, R.string.ftv_h_data,
+            R.string.ftv_h_account, R.string.ftv_h_device, R.string.ftv_h_equipment,
+            R.string.ftv_h_help,
     };
 
     private FireTvSettingsPanel() { }
@@ -165,8 +173,8 @@ public final class FireTvSettingsPanel {
             // without it opens the screen all the same; the row then carries that action.
             String alt = fallbackFor(SCREENS[i][ID]);
             ResolveInfo ar = alt == null ? null : pm.resolveActivity(intentFor(alt), 0);
-            if (opens(ar) && sameScreen(ri.activityInfo, ar.activityInfo)
-                    && granted(c, ar.activityInfo.permission)) {
+            if (opens(ar) && granted(c, ar.activityInfo.permission)
+                    && (sameScreen(ri.activityInfo, ar.activityInfo) || forwards(ar.activityInfo))) {
                 String[] row = SCREENS[i].clone();
                 row[ACTION] = alt;
                 out.add(row);
@@ -185,6 +193,18 @@ public final class FireTvSettingsPanel {
     private static boolean granted(Context c, String permission) {
         return permission == null || c.checkPermission(permission, android.os.Process.myPid(),
                 android.os.Process.myUid()) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    /**
+     * The standard action can land on a compliance stub of the settings app instead of the
+     * screen. On Fire OS 8 (Android 11) that stub passes the press on to the real screen,
+     * so the row works there (seen on an AFTBR92D74, 8.1.8.5); on Fire OS 7 (Android 9)
+     * the stub of the same name opens nothing (seen on an AFTDCT31). The stub counts only
+     * from Android 11 up.
+     */
+    private static boolean forwards(ActivityInfo ai) {
+        return Build.VERSION.SDK_INT >= 30 && SETTINGS_PKG.equals(ai.packageName)
+                && ai.name.endsWith(".compliance.CTSDummyIntentHandler");
     }
 
     /** The same activity, counting an alias as the activity it stands for. */

@@ -1,0 +1,362 @@
+/*
+ * Homestead - a replacement home screen for Fire TV.
+ * Copyright (C) 2026 Homestead contributors
+ *
+ * This program is free software: you can redistribute it and/or modify it under the terms
+ * of the GNU General Public License as published by the Free Software Foundation, either
+ * version 3 of the License, or (at your option) any later version. It is distributed in
+ * the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied
+ * warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General
+ * Public License for more details. You should have received a copy of the GNU General
+ * Public License along with this program. If not, see <https://www.gnu.org/licenses/>.
+ */
+package com.homestead.launcher;
+
+import android.content.Context;
+import android.content.SharedPreferences;
+import android.content.res.Resources;
+import android.graphics.BitmapFactory;
+import android.os.Handler;
+import android.os.Looper;
+import android.util.Log;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+import java.util.Locale;
+import java.util.TimeZone;
+
+/**
+ * Downloads Bing's image of the day into a separate private cache when the user chooses it.
+ * Bing marks some images as not for use as a wallpaper; on such a day the newest image it
+ * does allow is used instead.
+ */
+final class BingWallpaper {
+    static final String ID = "bing";
+
+    private static final String TAG = "Homestead";
+    private static final String API_PREFIX =
+            "https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=8&mkt=";
+    private static final String PREFS = "bing_wallpaper";
+    private static final String FILE = "bing-wallpaper.jpg";
+    private static final int MAX_JSON = 256 * 1024;
+    private static final int MAX_IMAGE = 16 * 1024 * 1024;
+    /** After a failure, and while Bing still offers the image already here. */
+    private static final long RETRY_MS = 60L * 60L * 1000L;
+    /** Bing offers each image for a day, from the time its entry gives. */
+    private static final long DAY_MS = 24L * 60L * 60L * 1000L;
+    /** Past the changeover, so the check does not land just before it. */
+    private static final long MARGIN_MS = 5L * 60L * 1000L;
+    /** When the entry's time is no help, such as on a TV whose clock is wrong. */
+    private static final long FALLBACK_MS = 6L * 60L * 60L * 1000L;
+    private static final Handler MAIN = new Handler(Looper.getMainLooper());
+
+    /** Markets Bing provides regional daily images for; "" (the default) follows the TV. */
+    private static final String[] MARKETS = {
+        "", "en-US", "en-GB", "en-CA", "fr-CA", "de-DE", "fr-FR",
+        "it-IT", "es-ES", "ja-JP", "zh-CN", "pt-BR", "en-IN"
+    };
+
+    // Accessed from the main thread: HomeGrid and settings both invoke refresh from there.
+    private static boolean busy;
+    /** The region asked for while a check was running, or null. */
+    private static String pendingMarket;
+    private static final List<Runnable> done = new ArrayList<Runnable>();
+
+    private BingWallpaper() { }
+
+    static boolean chosen(Context c) { return ID.equals(Prefs.backgroundId(c)); }
+
+    static File file(Context c) {
+        File f = new File(c.getFilesDir(), FILE);
+        return f.isFile() && f.length() > 0 ? f : null;
+    }
+
+    /** A check or a download is running. Main thread. */
+    static boolean busy() { return busy; }
+
+    /**
+     * The image held is from another region than the one wanted now, so the download for
+     * this region has not succeeded yet. Main thread.
+     */
+    static boolean stale(Context c) {
+        return !market(c).equals(
+                c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("market", ""));
+    }
+
+    /** The markets the Settings list offers, the TV's own region first. */
+    static String[] markets() { return MARKETS.clone(); }
+
+    /** The market picked in Settings; "" means the TV's region. */
+    static String chosenMarket(Context c) { return Prefs.bingMarket(c); }
+
+    /** Market names shown in Settings. */
+    static String marketLabel(Context c) { return marketLabel(c, Prefs.bingMarket(c)); }
+
+    /** The name shown in Settings for a market code; "" names the TV's own region. */
+    static String marketLabel(Context c, String m) {
+        if (m.isEmpty()) return c.getString(R.string.bg_bing_market_tv, tvMarket());
+        if ("en-US".equals(m)) return c.getString(R.string.bg_bing_mkt_us);
+        if ("en-GB".equals(m)) return c.getString(R.string.bg_bing_mkt_gb);
+        if ("en-CA".equals(m)) return c.getString(R.string.bg_bing_mkt_ca_en);
+        if ("fr-CA".equals(m)) return c.getString(R.string.bg_bing_mkt_ca_fr);
+        if ("de-DE".equals(m)) return c.getString(R.string.bg_bing_mkt_de);
+        if ("fr-FR".equals(m)) return c.getString(R.string.bg_bing_mkt_fr);
+        if ("it-IT".equals(m)) return c.getString(R.string.bg_bing_mkt_it);
+        if ("es-ES".equals(m)) return c.getString(R.string.bg_bing_mkt_es);
+        if ("ja-JP".equals(m)) return c.getString(R.string.bg_bing_mkt_jp);
+        if ("zh-CN".equals(m)) return c.getString(R.string.bg_bing_mkt_cn);
+        if ("pt-BR".equals(m)) return c.getString(R.string.bg_bing_mkt_br);
+        if ("en-IN".equals(m)) return c.getString(R.string.bg_bing_mkt_in);
+        return m;
+    }
+
+    /** Resolves the effective market code: the user's choice, or inferred from the TV's system locale. */
+    static String market(Context c) {
+        String m = Prefs.bingMarket(c);
+        return m.isEmpty() ? tvMarket() : m;
+    }
+
+    /** The market inferred from the TV's system locale, independent of the app language. */
+    private static String tvMarket() {
+        Locale l = Resources.getSystem().getConfiguration().locale;
+        if (l == null) l = Locale.getDefault();
+        String country = l.getCountry();
+        String language = l.getLanguage();
+        if (country != null && !country.isEmpty() && language != null && !language.isEmpty()) {
+            return language.toLowerCase(Locale.US) + "-" + country.toUpperCase(Locale.US);
+        }
+        if ("de".equalsIgnoreCase(language)) return "de-DE";
+        if ("fr".equalsIgnoreCase(language)) return "fr-FR";
+        if ("ja".equalsIgnoreCase(language)) return "ja-JP";
+        if ("zh".equalsIgnoreCase(language)) return "zh-CN";
+        if ("it".equalsIgnoreCase(language)) return "it-IT";
+        if ("es".equalsIgnoreCase(language)) return "es-ES";
+        if ("pt".equalsIgnoreCase(language)) return "pt-BR";
+        return "en-US";
+    }
+
+    /**
+     * Ask Bing for its current image when one is due, and run onDone on the main thread when
+     * the answer is in, whether or not it brought a new image. Main thread.
+     *
+     * Bing changes its image at a fixed time of day (such as 08:00 UTC for en-US, or around
+     * midnight for local markets), not at the TV's midnight, so the next check is due a day
+     * after the time in the entry of the image held, not on the next local calendar day.
+     * Until then nothing is sent. If Bing still offers the same image when the check is due,
+     * it is asked again an hour later.
+     *
+     * A failure keeps the previous image on screen and is retried after an hour. force
+     * skips that wait, for when the user selects the row or changes the region; it does not
+     * fetch again while the image held is still Bing's current one. No timer wakes the television.
+     *
+     * A region chosen while a check is running is asked for as soon as that check ends, and
+     * those waiting hear once, from the answer for the region wanted last.
+     */
+    static void refresh(Context context, boolean force, Runnable onDone) {
+        final Context c = context.getApplicationContext();
+        if (!chosen(c)) return;
+        if (busy) {
+            pendingMarket = market(c);
+            if (onDone != null) done.add(onDone);
+            return;
+        }
+        final SharedPreferences p = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        final long now = System.currentTimeMillis();
+        final boolean have = file(c) != null;
+        final String mkt = market(c);
+        final String api = API_PREFIX + mkt;
+        final String lastMarket = p.getString("market", "");
+        final String attemptMarket = p.getString("attempt_market", "");
+        final boolean marketChanged = !mkt.equals(lastMarket);
+        final boolean triedThisMarket = mkt.equals(attemptMarket);
+        // A time further off than Bing keeps an image is a clock that was changed: check.
+        long next = p.getLong("next", 0L);
+        if (!marketChanged && have && now < next && next - now <= DAY_MS + RETRY_MS) return;
+        if (!force && (!marketChanged || triedThisMarket)
+                && Math.abs(now - p.getLong("attempt", 0L)) < RETRY_MS) return;
+        if (onDone != null) done.add(onDone);
+        busy = true;
+        p.edit().putLong("attempt", now).putString("attempt_market", mkt).apply();
+        final String held = p.getString("image", "");
+        new Thread(new Runnable() {
+            public void run() {
+                String result;
+                try {
+                    JSONObject page = new JSONObject(new String(fetch(api, MAX_JSON, false), "UTF-8"));
+                    JSONArray images = page.getJSONArray("images");
+                    // Newest first. The newest one may not be allowed as a wallpaper.
+                    JSONObject image = null;
+                    for (int i = 0; i < images.length() && image == null; i++) {
+                        JSONObject entry = images.optJSONObject(i);
+                        if (entry != null && entry.optBoolean("wp", false)
+                                && entry.optString("url", "").length() > 0) {
+                            image = entry;
+                        }
+                    }
+                    if (image == null) throw new IOException("Bing did not offer an image");
+                    String path = image.getString("url");
+                    boolean same = have && path.equals(held) && mkt.equals(lastMarket);
+                    if (!same) {
+                        URL imageUrl = new URL(new URL(api), path);
+                        byte[] bytes = fetch(imageUrl.toString(), MAX_IMAGE, true);
+                        verifyImage(bytes);
+                        replace(c, bytes);
+                    }
+                    long after = System.currentTimeMillis();
+                    // The next image comes a day after the newest entry, whichever was taken.
+                    long due = startOf(images.getJSONObject(0).optString("fullstartdate", ""))
+                            + DAY_MS + MARGIN_MS;
+                    if (due <= after || due - after > DAY_MS + RETRY_MS) {
+                        due = after + (same ? RETRY_MS : FALLBACK_MS);
+                    }
+                    // The wait after a failure is over: from here the due time decides.
+                    p.edit().putString("image", path)
+                            .putString("market", mkt)
+                            .remove("attempt_market")
+                            .putLong("next", due)
+                            .remove("attempt")
+                            .apply();
+                    result = (same ? "no new image yet" : "new image cached") + " (" + mkt + "), next check "
+                            + utc("yyyy-MM-dd HH:mm").format(new Date(due)) + " UTC";
+                } catch (Throwable t) {
+                    result = "kept previous image: "
+                            + (t instanceof IOException ? t.getMessage() : "could not read Bing's image");
+                    Log.w(TAG, "Bing wallpaper not updated: " + t);
+                }
+                final String outcome = result;
+                MAIN.post(new Runnable() {
+                    public void run() {
+                        busy = false;
+                        Log.i(TAG, "Bing wallpaper: " + outcome);
+                        // The region was changed while this ran: ask for the one wanted now,
+                        // and leave those waiting to hear from that answer. A failure for
+                        // the same region is not asked again here; that waits its hour.
+                        String wanted = pendingMarket;
+                        pendingMarket = null;
+                        if (wanted != null && !wanted.equals(mkt)) {
+                            refresh(c, true, null);
+                            if (busy) return;
+                        }
+                        // A copy: a callback may ask again, which adds to the list.
+                        List<Runnable> waiting = new ArrayList<Runnable>(done);
+                        done.clear();
+                        for (Runnable r : waiting) {
+                            try { r.run(); } catch (Throwable ignored) { }
+                        }
+                    }
+                });
+            }
+        }, "homestead-bing-wallpaper").start();
+    }
+
+    private static SimpleDateFormat utc(String pattern) {
+        SimpleDateFormat f = new SimpleDateFormat(pattern, Locale.US);
+        f.setTimeZone(TimeZone.getTimeZone("UTC"));
+        return f;
+    }
+
+    /** When Bing started offering an image, from its entry ("202611130800", UTC); 0 if unreadable. */
+    private static long startOf(String fullStartDate) {
+        try {
+            return utc("yyyyMMddHHmm").parse(fullStartDate).getTime();
+        } catch (Throwable t) {
+            return 0L;
+        }
+    }
+
+    /** HTTPS to Bing only; image redirects are held to the same origin boundary. */
+    private static URL allowed(String address) throws IOException {
+        URL u = new URL(address);
+        String host = u.getHost().toLowerCase(Locale.US);
+        boolean bing = host.equals("bing.com") || host.endsWith(".bing.com");
+        if (!"https".equals(u.getProtocol()) || !bing || u.getUserInfo() != null
+                || (u.getPort() != -1 && u.getPort() != 443)) {
+            throw new IOException("Bing returned an unsupported address");
+        }
+        return u;
+    }
+
+    private static byte[] fetch(String address, int limit, boolean image) throws IOException {
+        URL url = allowed(address);
+        for (int redirects = 0; redirects < 5; redirects++) {
+            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+            connection.setInstanceFollowRedirects(false);
+            connection.setConnectTimeout(15000);
+            connection.setReadTimeout(20000);
+            connection.setRequestProperty("User-Agent", "Homestead/2 Bing wallpaper");
+            try {
+                int code = connection.getResponseCode();
+                if (code >= 300 && code < 400) {
+                    String location = connection.getHeaderField("Location");
+                    if (location == null) throw new IOException("Bing sent an invalid redirect");
+                    url = allowed(new URL(url, location).toString());
+                    continue;
+                }
+                if (code != 200) throw new IOException("Bing is unavailable (HTTP " + code + ")");
+                String type = connection.getContentType();
+                if (image && (type == null || !type.toLowerCase(Locale.US).startsWith("image/"))) {
+                    throw new IOException("Bing returned a page instead of an image");
+                }
+                if (connection.getContentLength() > limit) throw new IOException("Bing image is too large");
+                InputStream in = connection.getInputStream();
+                ByteArrayOutputStream out = new ByteArrayOutputStream();
+                try {
+                    byte[] buffer = new byte[8192];
+                    int n, total = 0;
+                    while ((n = in.read(buffer)) != -1) {
+                        total += n;
+                        if (total > limit) throw new IOException("Bing image is too large");
+                        out.write(buffer, 0, n);
+                    }
+                    return out.toByteArray();
+                } finally {
+                    try { in.close(); } catch (Throwable ignored) { }
+                }
+            } finally {
+                connection.disconnect();
+            }
+        }
+        throw new IOException("Bing redirected too many times");
+    }
+
+    private static void verifyImage(byte[] bytes) throws IOException {
+        BitmapFactory.Options o = new BitmapFactory.Options();
+        o.inJustDecodeBounds = true;
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.length, o);
+        if (o.outWidth < 320 || o.outHeight < 180 || o.outWidth > 30000 || o.outHeight > 30000) {
+            throw new IOException("Bing did not return a usable wallpaper");
+        }
+    }
+
+    /** Write and validate before replacing the cache, so a bad response cannot blank it. */
+    private static void replace(Context c, byte[] bytes) throws IOException {
+        File dest = new File(c.getFilesDir(), FILE);
+        File part = new File(c.getFilesDir(), FILE + ".part");
+        FileOutputStream out = null;
+        boolean saved = false;
+        try {
+            out = new FileOutputStream(part);
+            out.write(bytes);
+            out.getFD().sync();
+            out.close();
+            out = null;
+            saved = part.renameTo(dest);
+            if (!saved) throw new IOException("could not save Bing wallpaper");
+        } finally {
+            if (out != null) try { out.close(); } catch (Throwable ignored) { }
+            if (!saved) part.delete();
+        }
+    }
+}

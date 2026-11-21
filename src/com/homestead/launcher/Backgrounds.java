@@ -87,6 +87,8 @@ final class Backgrounds {
 
     /** The setting value for the photo. */
     static final String PHOTO_ID = "photo";
+    /** Bing's daily image; its cache is separate from the photo the user supplied. */
+    static final String BING_ID = BingWallpaper.ID;
     /** The photo's text and ring colours, and its look until the photo has loaded. */
     static final Preset PHOTO_LOOK =
             new Preset(PHOTO_ID, "Photo", 0xFF000000, 0xFF000000, 0xFFFFFFFF, 0xFFE6E6E6, EDGE);
@@ -132,6 +134,7 @@ final class Backgrounds {
 
     static Preset current(Context c) {
         String id = currentId(c);
+        if (BING_ID.equals(id)) return BingWallpaper.file(c) != null ? PHOTO_LOOK : PRESETS[0];
         if (PHOTO_ID.equals(id) || isLandscape(id)) return PHOTO_LOOK;
         for (int i = 0; i < PRESETS.length; i++) {
             if (PRESETS[i].id.equals(id)) return PRESETS[i];
@@ -141,6 +144,16 @@ final class Backgrounds {
 
     /** The photo sent from a computer or picked on the TV is the chosen look. */
     static boolean photoChosen(Context c) { return PHOTO_ID.equals(currentId(c)); }
+
+    /** A picture read from a file is the chosen look: the photo, or Bing's image once it is here. */
+    static boolean pictureChosen(Context c) {
+        return photoChosen(c) || (BING_ID.equals(currentId(c)) && BingWallpaper.file(c) != null);
+    }
+
+    /** The file behind the chosen look, or null: Bing's cache when Bing is chosen, else the photo. */
+    static File pictureFile(Context c) {
+        return BING_ID.equals(currentId(c)) ? BingWallpaper.file(c) : photoFile(c);
+    }
 
     static boolean isLandscape(String id) { return id != null && id.startsWith(LANDSCAPE_PREFIX); }
 
@@ -194,6 +207,7 @@ final class Backgrounds {
     /** The value shown on the Settings row. */
     static String label(Context c) {
         String id = currentId(c);
+        if (BING_ID.equals(id)) return c.getString(R.string.bg_bing);
         if (isLandscape(id)) return landscapeName(c, id);
         if (!photoChosen(c)) return name(c, current(c));
         return c.getString(photoFile(c) != null ? R.string.bg_photo : R.string.bg_photo_none);
@@ -286,12 +300,15 @@ final class Backgrounds {
     }
 
     /** A small copy for the row's swatch; null if it cannot be read. */
-    static Bitmap landscapeThumb(Context c, String file) {
+    static Bitmap landscapeThumb(Context c, String file) { return landscapeThumb(c, file, 16); }
+
+    /** A copy reduced by sample (a power of two) each way; null if it cannot be read. */
+    static Bitmap landscapeThumb(Context c, String file, int sample) {
         java.io.InputStream in = null;
         try {
             in = c.getAssets().open(file);
             BitmapFactory.Options o = new BitmapFactory.Options();
-            o.inSampleSize = 16;
+            o.inSampleSize = sample;
             return BitmapFactory.decodeStream(in, null, o);
         } catch (Throwable t) {
             return null;
@@ -363,8 +380,13 @@ final class Backgrounds {
                 MAIN.post(new Runnable() {
                     public void run() {
                         loading = false;
-                        // The user moved on while it decoded: do not keep it.
-                        if (!wanted.equals(currentId(app))) return;
+                        // The user moved on while it decoded: do not keep it. The look chosen
+                        // since could not start its own decode while this one ran, so the
+                        // caller looks again and starts it now.
+                        if (!wanted.equals(currentId(app))) {
+                            if (done != null) done.run();
+                            return;
+                        }
                         photo = b;
                         photoKey = key;
                         Log.i(TAG, "background photo " + (b == null ? "could not be read"

@@ -25,14 +25,25 @@ import java.util.Locale;
  */
 final class Lang {
 
-    /** Prefs values, in the order the Settings row cycles through them; "" is the TV's language. */
-    static final String[] CODES = { "", "en", "fr", "de" };
+    /** Prefs values, in the order Settings lists them; "" is the TV's language. */
+    static final String[] CODES = { "", "en", "fr", "de", "es", "zh-TW" };
 
     private Lang() { }
 
     static void apply(Context c) {
         String code = Prefs.language(c);
-        Locale l = code.isEmpty() ? Resources.getSystem().getConfiguration().locale : new Locale(code);
+        Locale l;
+        if (code.isEmpty()) {
+            l = Resources.getSystem().getConfiguration().locale;
+        } else if (code.contains("-")) {
+            String[] parts = code.split("-", 2);
+            l = new Locale(parts[0], parts[1]);
+        } else if (code.contains("_")) {
+            String[] parts = code.split("_", 2);
+            l = new Locale(parts[0], parts[1]);
+        } else {
+            l = new Locale(code);
+        }
         Locale.setDefault(l);
         apply(c.getResources(), l);
         apply(c.getApplicationContext().getResources(), l);
@@ -44,21 +55,16 @@ final class Lang {
         r.updateConfiguration(conf, r.getDisplayMetrics());
     }
 
-    /** The next choice in the Settings cycle. */
-    static String next(Context c) {
-        String cur = Prefs.language(c);
-        for (int i = 0; i < CODES.length; i++) {
-            if (CODES[i].equals(cur)) return CODES[(i + 1) % CODES.length];
-        }
-        return CODES[0];
-    }
-
     /** Language names are written in their own language, so anyone can find theirs. */
-    static String label(Context c) {
-        String code = Prefs.language(c);
+    static String label(Context c) { return label(c, Prefs.language(c)); }
+
+    /** The name of one of CODES. */
+    static String label(Context c, String code) {
+        if (code.equals("zh-TW") || code.equals("zh_TW") || code.equals("zh")) return "繁體中文";
         if (code.equals("en")) return "English";
         if (code.equals("fr")) return "Français";
         if (code.equals("de")) return "Deutsch";
+        if (code.equals("es")) return "Español";
         return c.getString(R.string.lang_tv);
     }
 }

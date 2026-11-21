@@ -33,6 +33,8 @@ public final class SettingsPanel {
         void showRow(String row);
         void showPanel(View v);
         void closePanel();
+        /** Put the focus where a Home press puts it, once no page is open. */
+        void focusStart();
     }
 
     private SettingsPanel() { }
@@ -68,19 +70,11 @@ public final class SettingsPanel {
             public void onClick(View v) { host.showPanel(buildLook(c, host, summaries)); }
         });
 
-        final Panel.Row lang = p.addRow(c.getString(R.string.set_lang), Lang.label(c), null);
+        final Panel.Row lang = p.addRow(c.getString(R.string.set_lang), Lang.label(c), null).opens();
         lang.setValueColor(0xFF8FA3B8);
         lang.setHelp(c.getString(R.string.set_lang_help));
         lang.cell.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) {
-                Prefs.setLanguage(c, Lang.next(c));
-                HomeRedirectService.languageChanged(c);
-                // This page was drawn in the old language; draw it again in the new one, back
-                // on this row.
-                host.closePanel();
-                focusLanguage = true;
-                host.showPanel(build(c, host));
-            }
+            public void onClick(View v) { host.showPanel(buildLanguage(c, host)); }
         });
         if (focusLanguage) {
             focusLanguage = false;
@@ -115,6 +109,15 @@ public final class SettingsPanel {
         setup.cell.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) { host.showPanel(SetupPanel.build(c, host)); }
         });
+
+        // The guide a new install starts with, for anyone who skipped it or wants its
+        // newer steps. It replaces this page, so finishing it lands on the home screen.
+        p.addRow(c.getString(R.string.set_rerun), "", new Runnable() {
+            public void run() {
+                host.closePanel();
+                host.showPanel(OnboardingPanel.build(c, host, true));
+            }
+        }).opens().setHelp(c.getString(R.string.set_rerun_help));
 
         SetupPanel.addTurnOffRow(c, p, new Runnable() {
             public void run() {
@@ -191,14 +194,14 @@ public final class SettingsPanel {
 
     /** The dock layout is what the home screen draws: Dock chosen, and not Simple mode. */
     private static boolean dockLayout(Context c) {
-        return Prefs.design(c) == Prefs.DESIGN_DOCK && !Prefs.simpleMode(c);
+        return Prefs.dockLayout(c);
     }
 
     private static View buildHome(final Context c, final Host host, final Runnable changed) {
         final Panel p = new Panel(c, c.getString(R.string.set_home), null, Panel.SHEET);
 
         // The design first: it decides what the rest of the page means. Dock size shows
-        // only with Dock, and Row order (further down) only with Classic, which has rows.
+        // only with Dock; Row order (further down) keeps one order per design.
         final int[] designs = { R.string.opt_design_classic, R.string.opt_design_dock };
         final int[] sizes = { R.string.opt_dock_s, R.string.opt_dock_m, R.string.opt_dock_l, R.string.opt_dock_xl };
         final Panel.Row[] orderRow = new Panel.Row[1];
@@ -213,7 +216,7 @@ public final class SettingsPanel {
                 Prefs.setDesign(c, n);
                 design.setValue(c.getString(designs[n]));
                 dockSize.cell.setVisibility(n == Prefs.DESIGN_DOCK ? View.VISIBLE : View.GONE);
-                if (orderRow[0] != null) orderRow[0].cell.setVisibility(dockLayout(c) ? View.GONE : View.VISIBLE);
+                if (orderRow[0] != null) orderRow[0].setValue(orderSummary(c));
                 host.rebuildGrid();
                 changed.run();
             }
@@ -238,6 +241,16 @@ public final class SettingsPanel {
         hidden.cell.setOnFocusChangeListener(chain(hidden.cell.getOnFocusChangeListener(),
                 new Runnable() {
                     public void run() { hidden.setValue(String.valueOf(Prefs.hiddenCount(c))); }
+                }));
+
+        final Panel.Row pinnedRow = p.addRow(c.getString(R.string.set_pinned),
+                String.valueOf(Prefs.pinnedCount(c)), null).opens();
+        pinnedRow.cell.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) { host.showPanel(buildPinnedList(c, host)); }
+        });
+        pinnedRow.cell.setOnFocusChangeListener(chain(pinnedRow.cell.getOnFocusChangeListener(),
+                new Runnable() {
+                    public void run() { pinnedRow.setValue(String.valueOf(Prefs.pinnedCount(c))); }
                 }));
 
         p.addNote(c.getString(R.string.set_hidden_note));
@@ -317,6 +330,23 @@ public final class SettingsPanel {
             }
         });
         wide.setHelp(c.getString(R.string.opt_wide_help));
+        // One row means wide tiles for the other apps, so that switch steps aside; so does
+        // the switch for their row (further down), which the one row replaces.
+        final Panel.Row[] secNonRow = new Panel.Row[1];
+        final Panel.Row oneRow = p.addRow(c.getString(R.string.set_apps_one), onOff(Prefs.appsOneRow(c)), null).asSwitch();
+        oneRow.cell.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                boolean n = !Prefs.appsOneRow(c);
+                Prefs.setAppsOneRow(c, n);
+                oneRow.setValue(onOff(n));
+                wide.cell.setVisibility(n ? View.GONE : View.VISIBLE);
+                if (secNonRow[0] != null) secNonRow[0].cell.setVisibility(n ? View.GONE : View.VISIBLE);
+                AppModel.reload(c);
+                host.rebuildGrid();
+            }
+        });
+        oneRow.setHelp(c.getString(R.string.set_apps_one_help));
+        wide.cell.setVisibility(Prefs.appsOneRow(c) ? View.GONE : View.VISIBLE);
 
         final Panel.Row fire = p.addRow(c.getString(R.string.opt_fire), onOff(Prefs.fireOsIcons(c)), null).asSwitch();
         fire.cell.setOnClickListener(new View.OnClickListener() {
@@ -337,8 +367,6 @@ public final class SettingsPanel {
             public void onClick(View v) { host.showPanel(buildRowOrder(c, host)); }
         });
         order.setHelp(c.getString(R.string.set_row_order_help));
-        // One grid in Dock, so there is no row order to set; Simple mode keeps the rows.
-        order.cell.setVisibility(dockLayout(c) ? View.GONE : View.VISIBLE);
         orderRow[0] = order;
         // The order changes on the page this row opens; repaint it on the way back.
         order.cell.setOnFocusChangeListener(chain(order.cell.getOnFocusChangeListener(),
@@ -381,6 +409,8 @@ public final class SettingsPanel {
                 host.rebuildGrid();
             }
         });
+        secNon.cell.setVisibility(Prefs.appsOneRow(c) ? View.GONE : View.VISIBLE);
+        secNonRow[0] = secNon;
 
         p.addSectionHelp(c.getString(R.string.set_sections_help, c.getString(R.string.home_sec_inputs)));
 
@@ -474,13 +504,13 @@ public final class SettingsPanel {
         p.addRow(c.getString(R.string.ro_reset), "", new Runnable() {
             public void run() {
                 order.clear();
-                order.addAll(Prefs.usualRowOrder());
+                order.addAll(Prefs.usualRowOrder(c));
                 Prefs.setRowOrder(c, order);
                 drop.run();
                 host.rebuildGrid();
                 host.showRow(order.get(0));
             }
-        }).setHelp(c.getString(R.string.ro_reset_help));
+        }).setHelp(c.getString(dockLayout(c) ? R.string.ro_reset_help_dock : R.string.ro_reset_help));
         p.addRow(c.getString(R.string.set_back), "", new Runnable() {
             public void run() { host.closePanel(); }
         });
@@ -503,7 +533,8 @@ public final class SettingsPanel {
         if (row.equals(Prefs.ROW_SHORTCUTS)) return c.getString(R.string.home_sec_settings);
         if (row.equals(Prefs.ROW_INPUTS)) return c.getString(R.string.home_sec_inputs);
         if (row.equals(Prefs.ROW_NONTV)) return c.getString(R.string.home_sec_nontv);
-        return c.getString(R.string.home_sec_tv);
+        // With Apps in one row, the TV apps' row holds every app and is headed Apps.
+        return c.getString(Prefs.appsOneRow(c) ? R.string.home_sec_apps : R.string.home_sec_tv);
     }
 
     /** Why a row is not on the home screen, or "" when it is. */
@@ -514,7 +545,10 @@ public final class SettingsPanel {
                     : place == Prefs.SHORTCUTS_OFF ? c.getString(R.string.ftv_place_off) : "";
         }
         if (row.equals(Prefs.ROW_INPUTS)) return Prefs.showInputs(c) ? "" : c.getString(R.string.ro_hidden);
-        if (row.equals(Prefs.ROW_NONTV)) return Prefs.showNonTv(c) ? "" : c.getString(R.string.ro_hidden);
+        if (row.equals(Prefs.ROW_NONTV)) {
+            if (Prefs.appsOneRow(c)) return c.getString(R.string.ro_in_apps);
+            return Prefs.showNonTv(c) ? "" : c.getString(R.string.ro_hidden);
+        }
         return "";
     }
 
@@ -531,7 +565,7 @@ public final class SettingsPanel {
         if (row.equals(Prefs.ROW_SHORTCUTS)) return c.getString(R.string.ro_s_shortcuts);
         if (row.equals(Prefs.ROW_INPUTS)) return c.getString(R.string.ro_s_inputs);
         if (row.equals(Prefs.ROW_NONTV)) return c.getString(R.string.ro_s_nontv);
-        return c.getString(R.string.ro_s_tv);
+        return c.getString(Prefs.appsOneRow(c) ? R.string.home_sec_apps : R.string.ro_s_tv);
     }
 
     private static String homeSummary(Context c) {
@@ -566,11 +600,20 @@ public final class SettingsPanel {
                 for (int i = 0; i < rows.size(); i++) {
                     boolean on = ids.get(i).equals(now);
                     String v = on ? c.getString(R.string.bg_in_use) : "";
+                    boolean good = on;
                     if (noFile && ids.get(i).equals(Backgrounds.PHOTO_ID)) {
                         v = c.getString(on ? R.string.bg_in_use_no_file : R.string.bg_no_file);
                     }
+                    // Bing's row speaks for Bing's own cache, and only while it is the choice.
+                    if (on && ids.get(i).equals(Backgrounds.BING_ID)) {
+                        if (BingWallpaper.busy()) v = c.getString(R.string.bg_bing_loading);
+                        else if (BingWallpaper.file(c) == null || BingWallpaper.stale(c)) {
+                            v = c.getString(R.string.bg_bing_failed);
+                            good = false;
+                        }
+                    }
                     rows.get(i).setValue(v);
-                    rows.get(i).setValueColor(on ? IN_USE : 0xFF8FA3B8);
+                    rows.get(i).setValueColor(good ? IN_USE : 0xFF8FA3B8);
                 }
             }
         };
@@ -637,7 +680,39 @@ public final class SettingsPanel {
             rows.add(r);
             ids.add(Backgrounds.landscapeId(file));
         }
+
+        p.addHeader(c.getString(R.string.bg_daily));
+        final Panel.Row bing = p.addRow(c.getString(R.string.bg_bing), "", null);
+        bing.setHelp(c.getString(R.string.bg_bing_help));
+        bing.cell.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                Backgrounds.choose(c, Backgrounds.BING_ID);
+                // Selecting the row is asking for the image now, so a failed attempt within
+                // the last hour does not hold this one off. The grid asks again as it
+                // rebuilds, and repaints itself when the image lands.
+                BingWallpaper.refresh(c, true, new Runnable() {
+                    public void run() {
+                        mark.run();
+                        changed.run();
+                    }
+                });
+                mark.run();
+                host.rebuildGrid();
+                changed.run();
+            }
+        });
+        rows.add(bing);
+        ids.add(Backgrounds.BING_ID);
         mark.run();
+
+        final Panel.Row market = p.addRow(c.getString(R.string.bg_bing_market), BingWallpaper.marketLabel(c), null).opens();
+        market.setValueColor(0xFF8FA3B8);
+        market.setHelp(c.getString(R.string.bg_bing_market_help));
+        market.cell.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                host.showPanel(buildBingMarket(c, host, market, mark, changed));
+            }
+        });
 
         p.addRow(c.getString(R.string.set_back), "", new Runnable() {
             public void run() { host.closePanel(); }
@@ -662,6 +737,125 @@ public final class SettingsPanel {
         d.setCornerRadius(AppModel.dp(c, 5));
         d.setStroke(AppModel.dp(c, 1), 0x59FFFFFF);
         return d;
+    }
+
+    // ---------------------------------------------------------------- language
+
+    /**
+     * The languages Homestead has, each named in itself, the TV's own first. Selecting one
+     * applies it at once and returns to Settings, drawn in that language; the one in use is
+     * marked.
+     */
+    private static View buildLanguage(final Context c, final Host host) {
+        final Panel p = new Panel(c, c.getString(R.string.set_lang),
+                c.getString(R.string.set_lang_help), Panel.SHEET);
+        final String now = Prefs.language(c);
+        View start = null;
+        for (int i = 0; i < Lang.CODES.length; i++) {
+            final String code = Lang.CODES[i];
+            final boolean on = code.equals(now);
+            final Panel.Row r = p.addRow(Lang.label(c, code), on ? c.getString(R.string.bg_in_use) : "", null);
+            r.setValueColor(on ? IN_USE : 0xFF8FA3B8);
+            if (on) start = r.cell;
+            r.cell.setOnClickListener(new View.OnClickListener() {
+                public void onClick(View v) {
+                    host.closePanel();
+                    if (code.equals(Prefs.language(c))) return;
+                    Prefs.setLanguage(c, code);
+                    HomeRedirectService.languageChanged(c);
+                    // Settings was drawn in the old language; draw it again in the new one,
+                    // back on the Language row.
+                    host.closePanel();
+                    focusLanguage = true;
+                    host.showPanel(build(c, host));
+                }
+            });
+        }
+        p.addRow(c.getString(R.string.set_back), "", new Runnable() {
+            public void run() { host.closePanel(); }
+        });
+
+        // Start on the language in use, one step after showPanel focuses the first row.
+        final View first = start;
+        if (first != null) {
+            p.root.post(new Runnable() {
+                public void run() {
+                    p.root.post(new Runnable() { public void run() { first.requestFocus(); } });
+                }
+            });
+        }
+        return p.root;
+    }
+
+    // ---------------------------------------------------------------- bing region
+
+    /**
+     * The regions Bing offers a daily image for, the TV's own first. Selecting one applies it
+     * at once and returns to the background page; the one in use is marked.
+     */
+    private static View buildBingMarket(final Context c, final Host host,
+                                        final Panel.Row summary, final Runnable mark,
+                                        final Runnable changed) {
+        final Panel p = new Panel(c, c.getString(R.string.bg_bing_market),
+                c.getString(R.string.bg_bing_market_help), Panel.SHEET);
+
+        final List<Panel.Row> rows = new ArrayList<Panel.Row>();
+        final List<String> codes = new ArrayList<String>();
+        final Runnable inUse = new Runnable() {
+            public void run() {
+                String now = BingWallpaper.chosenMarket(c);
+                for (int i = 0; i < rows.size(); i++) {
+                    boolean on = codes.get(i).equals(now);
+                    rows.get(i).setValue(on ? c.getString(R.string.bg_in_use) : "");
+                    rows.get(i).setValueColor(on ? IN_USE : 0xFF8FA3B8);
+                }
+            }
+        };
+
+        String[] markets = BingWallpaper.markets();
+        for (int i = 0; i < markets.length; i++) {
+            final String code = markets[i];
+            final Panel.Row r = p.addRow(BingWallpaper.marketLabel(c, code), "", null);
+            r.cell.setOnClickListener(new View.OnClickListener() {
+                public void onClick(View v) {
+                    if (!code.equals(BingWallpaper.chosenMarket(c))) {
+                        Prefs.setBingMarket(c, code);
+                        summary.setValue(BingWallpaper.marketLabel(c));
+                        // Nothing on screen changes, and nothing is sent, unless Bing is
+                        // the look in use. Then it goes as on the Bing row: ask now, and
+                        // the grid repaints itself when the image lands.
+                        if (Backgrounds.BING_ID.equals(Backgrounds.currentId(c))) {
+                            BingWallpaper.refresh(c, true, new Runnable() {
+                                public void run() {
+                                    mark.run();
+                                    changed.run();
+                                }
+                            });
+                            mark.run();
+                            host.rebuildGrid();
+                            changed.run();
+                        }
+                    }
+                    host.closePanel();
+                }
+            });
+            rows.add(r);
+            codes.add(code);
+        }
+        inUse.run();
+
+        p.addRow(c.getString(R.string.set_back), "", new Runnable() {
+            public void run() { host.closePanel(); }
+        });
+
+        // Start on the region in use, one step after showPanel focuses the first row.
+        final View start = rows.get(Math.max(0, codes.indexOf(BingWallpaper.chosenMarket(c)))).cell;
+        p.root.post(new Runnable() {
+            public void run() {
+                p.root.post(new Runnable() { public void run() { start.requestFocus(); } });
+            }
+        });
+        return p.root;
     }
 
     // ---------------------------------------------------------------- hidden list
@@ -712,6 +906,51 @@ public final class SettingsPanel {
             p.addRow(c.getString(R.string.set_show_all), "", new Runnable() {
                 public void run() {
                     Prefs.clearHidden(c);
+                    host.rebuildGrid();
+                    host.closePanel();
+                }
+            });
+        }
+        p.addRow(c.getString(R.string.set_back), "", new Runnable() {
+            public void run() { host.closePanel(); }
+        });
+        return p.root;
+    }
+
+    // ---------------------------------------------------------------- pinned list
+
+    /** The pinned tiles in their order, each unpinned with a press; the grid follows. */
+    private static View buildPinnedList(final Context c, final Host host) {
+        final Panel p = new Panel(c, c.getString(R.string.set_pinned),
+                c.getString(R.string.set_pinned_sub), Panel.SHEET);
+
+        List<String> keys = Prefs.pinned(c);
+        if (keys.isEmpty()) {
+            p.addNote(c.getString(R.string.set_pinned_none));
+        } else {
+            List<AppModel.Item> all = AppModel.allItems();
+            for (int i = 0; i < keys.size(); i++) {
+                final String key = keys.get(i);
+                String label = key;
+                for (int j = 0; j < all.size(); j++) {
+                    if (key.equals(all.get(j).key())) { label = all.get(j).label; break; }
+                }
+                if (label.equals(AppModel.LIVETV_KEY)) label = c.getString(R.string.home_livetv);
+                final Panel.Row r = p.addRow(label, c.getString(R.string.set_pinned_value), null);
+                r.cell.setOnClickListener(new View.OnClickListener() {
+                    public void onClick(View v) {
+                        Prefs.unpin(c, key);
+                        r.setValue(c.getString(R.string.set_unpinned_value));
+                        r.cell.setEnabled(false);
+                        AppModel.resort(c);
+                        host.rebuildGrid();
+                    }
+                });
+            }
+            p.addRow(c.getString(R.string.set_unpin_all), "", new Runnable() {
+                public void run() {
+                    Prefs.clearPinned(c);
+                    AppModel.resort(c);
                     host.rebuildGrid();
                     host.closePanel();
                 }

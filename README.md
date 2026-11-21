@@ -58,6 +58,23 @@ launcher as the system home activity and will not let anything else take it.
 
 Both pictures are from the same TV, a few minutes apart.
 
+## Styles
+
+<img src="screenshots/styles.jpg" alt="Six pictures of Homestead on one Fire TV Stick. Top row, the Dock design over three built-in landscapes: Mountains at dusk, Mountain lake, and Mount Ida, Crete. Bottom row: Dock over the Midnight colour, then the Classic design over the Deep sea colour and over Alps near Scuol.">
+
+All six are the same Fire TV Stick. The first four are the **Dock** design, the last two
+**Classic**.
+
+- **Design.** Classic keeps your inputs and apps in rows under their headings. Dock puts
+  the first of your TV apps on a band at the bottom of the first screen, in four sizes,
+  with the rest one press down.
+- **Background.** Eight colours, from the blue gradient to plain black, and eight built-in
+  landscapes: four drawn, four photos. Or [your own photo](#your-own-background-photo), or
+  Bing's image of the day.
+
+The first-run setup lets you try both with your own home screen beside the choices. Later
+they are under Settings → Home screen → Design, and Settings → Background.
+
 ## What it does
 
 - **A home screen without the ads.** Your inputs, your TV apps and everything else, in
@@ -74,20 +91,25 @@ Both pictures are from the same TV, a few minutes apart.
 - **A Live TV tile** on TVs with a built-in tuner, while Amazon's Live TV app is switched
   on. It opens Live TV on the last channel you watched. **Live TV first** (Settings → Home
   screen) makes it a large tile at the top, and the Home button always lands on it.
-- **Apps in the order you use them**, counted on the TV itself.
-- **Hide anything** you do not want to see: press MENU on a tile, or hold Select.
+- **Apps in the order you use them**, counted on the TV itself, or A–Z. **Pin** the ones
+  you want first: press MENU on a tile (or hold Select) for its menu, then **Pin to front**
+  or **Move**. Pinned tiles lead their row in the order you set; the rest follow the sort.
+- **Hide anything** you do not want to see, from the same menu.
 - **Pick a background** in Settings: the blue gradient, a few darker ones, plain black for
   OLED screens and night viewing, eight built-in **landscapes** (four drawn, four photos),
-  or [your own photo](#your-own-background-photo).
+  [your own photo](#your-own-background-photo), or Bing's image of the day. Bing is optional,
+  follows the TV's region or a chosen market, checks when Homestead opens, then waits until
+  Bing's next image is due, and keeps its last downloaded image offline.
 - **Optional extras** on the Settings → Home screen page, all off until you switch them on: a
-  greeting and the date at the top, non-TV apps as wide tiles, and Fire TV's own icons for
-  Amazon Home, Settings and TV Health.
+  greeting and the date at the top, non-TV apps as wide tiles, all apps in one row instead
+  of TV apps and the rest apart, and Fire TV's own icons for Amazon Home, Settings and TV
+  Health.
 - **Fire TV's own settings screens** (Settings → Fire TV settings): Network, Controllers &
-  Bluetooth, Applications, My Fire TV, Equipment control, Help and the rest, each opened
-  straight from Homestead where the TV allows it, with optional shortcuts to them on the home
-  screen or in a bar at the top.
-- **In English, French or German**, following the TV's language, or pick one under Settings →
-  Language.
+  Bluetooth, Applications, My Fire TV, Display mirroring, Equipment control, Help and the
+  rest, each opened straight from Homestead where the TV allows it, with optional shortcuts
+  to them on the home screen or in a bar at the top.
+- **In English, French, German, Spanish or Traditional Chinese**, following the TV's language, or pick one under
+  Settings → Language.
 - **Settings opens over the home screen**, so changes to the background, columns, clock and
   sections show behind it as you make them. Larger pages explain the selected row beside
   the list.
@@ -121,9 +143,10 @@ Real hardware, not emulators:
 | Amazon Fire TV Stick 4K (2nd gen) | `AFTKM` | 8.1.8.5 | **Reported by a user, not tested here**: Home button, Debloat (28 packages switched off; Fire OS 8 protects a few more than Fire OS 7), several reboots, and a background photo sent from a computer (1.2.9). Set up from a computer. |
 | Hisense 65U65SFC Pro (Fire TV Edition) | `AFTCIBFBD1` | 8.1.8.0 | **Reported by a user, not tested here**: Home button, Debloat, a full reboot, and the fix for repeated package events (1.2.3 and later). Set up from a computer. |
 | TCL 40V5D (Fire TV Edition) | `AFTTIFB900` | 14 (build SL14SHIP1021.86N) | **Reported by a user, not tested here**: Home button, Debloat, TV Health, a full reboot, HDMI/Composite tiles, and setup from a computer. Amazon's launcher switched off and back on, with Home going straight to Homestead after a reboot (1.6.11). |
+| Panasonic OLED Fire TV TV-65Z95BGT | `AFTGOLDFF` | 8.1.8.5 | **Reported by a user, not tested here**: Home button, setup without a computer, TV Health, Debloat (still applied after a reboot), and HDMI inputs. |
 
-The first two run Android 9 and were tested by the maintainer. The last three are user
-reports: two on Fire OS 8 (Android 11), one on Fire OS 14. Other devices are *expected* to
+The first two run Android 9 and were tested by the maintainer. The last four are user
+reports: three on Fire OS 8 (Android 11), one on Fire OS 14. Other devices are *expected* to
 work but are unverified.
 
 Debloat's list of packages was checked by hand on the Insignia TV above. Other models
@@ -166,7 +189,9 @@ app came to the front: it cannot read what is on screen and does not receive key
    options is not there, open My Fire TV → About and press Select on the device name seven
    times.
 2. Open **Homestead** from Amazon's app row. The first-run setup walks you through the
-   rest. Later, the same steps are under the **Settings** tile → **Setup**.
+   rest, then lets you choose the design and the background with your own home screen
+   beside the choices. Later, the same steps are under **Settings** → **Setup**, and
+   **Run setup again** in Settings opens the guide from the start.
 3. Select **Set it up** (or **On-device tunnel (advanced)** in Setup) and accept Android's
    VPN prompt. In both prompts, press Down to reach OK.
 4. The TV asks whether to allow the app's ADB key. Check that the fingerprint matches the
@@ -203,6 +228,14 @@ The first two commands switch the Home button on; the first replaces any other
 accessibility service you have switched on. The first grant lets TV Health change settings
 from the remote. The second lets Homestead catch the Home press early, so Amazon's home
 screen does not flash first, and makes Home work while Amazon's home screen is showing.
+On Fire OS 6, which refuses the accessibility service, also run
+
+```sh
+adb shell appops set com.homestead.launcher SYSTEM_ALERT_WINDOW allow
+```
+
+so Homestead can show its grid at once instead of after Fire OS's few seconds' hold (see
+[How the Home button works](#how-the-home-button-works)).
 To switch packages off, open **Commands for a computer** in the app: it lists exactly the
 commands still needed on your TV.
 
@@ -257,7 +290,7 @@ The picture is removed when Homestead is uninstalled.
 
 ## Setting it up for someone else
 
-Choose **Simple mode** on the first setup screen (or switch it on later in Settings) when
+Choose **Simple mode** in the first-run setup (or switch it on later in Settings) when
 the TV is for someone who just wants to watch it, such as a parent or grandparent.
 
 - **The Settings and TV Health tiles are hidden.** To open Settings, press **Menu (☰)
@@ -267,7 +300,7 @@ the TV is for someone who just wants to watch it, such as a parent or grandparen
   Hide what you want before you switch it on, or open Settings to change it later.
 - **No update pop-ups.** Homestead does not check for updates by itself; use *Check for
   updates* in Settings when you visit.
-- **When chosen during setup, it switches off Debloat's safe list** (what the *Switch off
+- **When turned on during setup, it switches off Debloat's safe list** (what the *Switch off
   everything marked safe* button does: ads, telemetry, tutorials and demo content), except
   Amazon Photos, which stays on for family pictures. Alexa is left on too, since asking
   for a show by voice is often easier than finding it with the remote. This needs the
@@ -323,6 +356,16 @@ watches the log for that one line and the overlay goes up first. It is also the 
 notice a Home press made while Amazon's home screen is already in front, since that changes
 no window. That needs `READ_LOGS`, which setup grants over ADB; [SECURITY.md](SECURITY.md)
 says exactly what is read.
+
+Fire OS 6 does not bind third-party accessibility services at all, so there the log watcher
+alone notices the Home press, and the overlay is a system-alert window, which needs
+`SYSTEM_ALERT_WINDOW` (`appops set ... SYSTEM_ALERT_WINDOW allow`). Nothing an app can do on
+Fire OS 6 lifts the hold on app launches (a `PendingIntent`, an alarm and moving a task are
+held too), and without the overlay Homestead appears only after it. While the overlay
+is in use, the Home watch runs as a foreground service, so it is not slowed down while
+another app is in front. An app picked on the overlay starts when the hold ends; the overlay
+stays until it has had time to draw, since Fire OS 6 does not let apps read when another
+app's window is drawn.
 
 ## Known limitations
 
